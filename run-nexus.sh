@@ -16,30 +16,31 @@ EOF
 )"
 
 # —————————————————————————————————————————————
-# 0) Direktori kerja & .env
+# 0) Tentukan direktori kerja & file .env
+#    Skrip diasumsikan di ~/run-nexus.sh
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKDIR="$SCRIPT_DIR/nexus-cli-docker"
 ENV_FILE="$WORKDIR/.env"
 CONFIG_DIR="$HOME/.nexus"
 
 # —————————————————————————————————————————————
-# 1) Load .env jika ada, atau prompt & buat
+# 1) Load .env jika ada dan valid, atau prompt jika belum
 if [[ -f "$ENV_FILE" ]]; then
-  # Source langsung agar semua VAR ter-export
-  set -a
-  # shellcheck disable=SC1090
-  source "$ENV_FILE"
-  set +a
-
-  # Validasi
-  if [[ -z "${WALLET_ADDRESS:-}" || -z "${NODE_ID:-}" ]]; then
-    echo "⚠️  .env ditemukan tapi WALLET_ADDRESS atau NODE_ID kosong. Perbaiki $ENV_FILE."
+  # Cek apakah variabel penting ada di file
+  if grep -q '^WALLET_ADDRESS=' "$ENV_FILE" && grep -q '^NODE_ID=' "$ENV_FILE"; then
+    # Export semua baris KEY=VALUE yang bukan komentar
+    set -a
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
+    set +a
+    echo "🗸 Loaded environment from $ENV_FILE"
+  else
+    echo "⚠️ .env ditemukan tapi tidak berisi WALLET_ADDRESS atau NODE_ID."
+    echo "   Silakan perbaiki $ENV_FILE atau hapus supaya skrip prompt ulang."
     exit 1
   fi
-
-  echo "🗸 Loaded env from $ENV_FILE"
 else
-  # Prompt sekali, lalu simpan ke .env
+  # Kalau belum ada .env, prompt kedua variabel dan simpan
   read -p "Masukkan WALLET_ADDRESS: " WALLET_ADDRESS
   read -p "Masukkan NODE_ID       : " NODE_ID
   mkdir -p "$WORKDIR"
@@ -49,17 +50,18 @@ WALLET_ADDRESS=$WALLET_ADDRESS
 NODE_ID=$NODE_ID
 EOF
   chmod 600 "$ENV_FILE"
-  echo "✅ Created $ENV_FILE"
+  echo "✅ Created .env at $ENV_FILE"
+  # Export langsung untuk run sekarang
   export WALLET_ADDRESS NODE_ID
 fi
 
 # —————————————————————————————————————————————
-# 2) Install Docker & Compose plugin jika belum ada
+# 2) Install Docker jika belum ada
 if ! command -v docker &> /dev/null; then
   echo "🔧 Installing Docker & compose plugin..."
   apt-get update
   apt-get install -y ca-certificates curl gnupg lsb-release
-  mkdir -p /etc/apt/keyrings
+  install -m0755 -d /etc/apt/keyrings
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
     -o /etc/apt/keyrings/docker.gpg
   chmod a+r /etc/apt/keyrings/docker.gpg
@@ -72,7 +74,7 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # —————————————————————————————————————————————
-# 3) Stop & remove old container
+# 3) Stop & remove old container (jika ada)
 docker rm -f nexus-node 2>/dev/null || true
 echo "🗸 Old nexus-node container removed"
 
@@ -120,9 +122,10 @@ docker run -d --name nexus-node \
   -v /etc/resolv.conf:/etc/resolv.conf:ro \
   --restart unless-stopped \
   nexus-cli:latest start --node-id "$NODE_ID"
+
 echo
-echo "✅ Node Nexus running in 'nexus-node' (detached)."
-echo "   Logs: docker logs -f nexus-node"
+echo "✅ Node Nexus berjalan di container 'nexus-node' (detached)."
+echo "   Pantau log: docker logs -f nexus-node"
 
 # —————————————————————————————————————————————
 # 8) Jalankan debug interaktif + TUI
