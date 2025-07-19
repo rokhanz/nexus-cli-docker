@@ -15,32 +15,30 @@ echo -e "$(cat << 'EOF'
 EOF
 )"
 
-# —————————————————————————————————————————————
-# 0) Tentukan direktori kerja & file .env
-#    Skrip diasumsikan di ~/run-nexus.sh
+# ————————————————————————————————————————————— 
+# 0) Pastikan .env auto‐load di ~/.bashrc
+BASHRC="$HOME/.bashrc"
+LOAD_SNIPPET='if [ -f "$HOME/nexus-cli-docker/.env" ]; then export $(grep -v "^\s*#" "$HOME/nexus-cli-docker/.env" | xargs); fi'
+if ! grep -Fxq "$LOAD_SNIPPET" "$BASHRC"; then
+  {
+    echo ""
+    echo "# Auto-load Nexus env"
+    echo "$LOAD_SNIPPET"
+  } >> "$BASHRC"
+  echo "🗸 Added auto-load of .env to $BASHRC"
+fi
+
+# 1) Direktori kerja & file env
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKDIR="$SCRIPT_DIR/nexus-cli-docker"
 ENV_FILE="$WORKDIR/.env"
 CONFIG_DIR="$HOME/.nexus"
 
-# —————————————————————————————————————————————
-# 1) Load .env jika ada dan valid, atau prompt jika belum
-if [[ -f "$ENV_FILE" ]]; then
-  # Cek apakah variabel penting ada di file
-  if grep -q '^WALLET_ADDRESS=' "$ENV_FILE" && grep -q '^NODE_ID=' "$ENV_FILE"; then
-    # Export semua baris KEY=VALUE yang bukan komentar
-    set -a
-    # shellcheck disable=SC1090
-    source "$ENV_FILE"
-    set +a
-    echo "🗸 Loaded environment from $ENV_FILE"
-  else
-    echo "⚠️ .env ditemukan tapi tidak berisi WALLET_ADDRESS atau NODE_ID."
-    echo "   Silakan perbaiki $ENV_FILE atau hapus supaya skrip prompt ulang."
-    exit 1
-  fi
+# 2) Load atau buat .env
+if [ -f "$ENV_FILE" ]; then
+  export $(grep -v '^\s*#' "$ENV_FILE" | xargs)
+  echo "🗸 Loaded env from $ENV_FILE"
 else
-  # Kalau belum ada .env, prompt kedua variabel dan simpan
   read -p "Masukkan WALLET_ADDRESS: " WALLET_ADDRESS
   read -p "Masukkan NODE_ID       : " NODE_ID
   mkdir -p "$WORKDIR"
@@ -50,13 +48,12 @@ WALLET_ADDRESS=$WALLET_ADDRESS
 NODE_ID=$NODE_ID
 EOF
   chmod 600 "$ENV_FILE"
-  echo "✅ Created .env at $ENV_FILE"
-  # Export langsung untuk run sekarang
   export WALLET_ADDRESS NODE_ID
+  echo "✅ Created $ENV_FILE"
 fi
 
 # —————————————————————————————————————————————
-# 2) Install Docker jika belum ada
+# 3) Install Docker & Compose plugin jika belum ada
 if ! command -v docker &> /dev/null; then
   echo "🔧 Installing Docker & compose plugin..."
   apt-get update
@@ -74,13 +71,13 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # —————————————————————————————————————————————
-# 3) Stop & remove old container (jika ada)
+# 4) Stop & remove old container
 docker rm -f nexus-node 2>/dev/null || true
 echo "🗸 Old nexus-node container removed"
 
 # —————————————————————————————————————————————
-# 4) Build/rebuild image nexus-cli:latest
-echo "📦 Building nexus-cli:latest (with --pull)…"
+# 5) Build (rebuild) image nexus-cli:latest
+echo "📦 Building nexus-cli:latest (with --pull)..."
 mkdir -p "$WORKDIR"
 cat > "$WORKDIR/Dockerfile" << 'EOF'
 FROM ubuntu:22.04
@@ -88,7 +85,8 @@ RUN apt-get update && apt-get install -y curl ca-certificates && \
     curl -sSf https://cli.nexus.xyz/ -o install.sh && \
     chmod +x install.sh && \
     NONINTERACTIVE=1 ./install.sh && \
-    rm install.sh && apt-get clean && rm -rf /var/lib/apt/lists/*
+    rm install.sh && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 ENV PATH="/root/.nexus/bin:$PATH"
 ENTRYPOINT ["nexus-network"]
 EOF
@@ -96,24 +94,23 @@ docker build --pull -t nexus-cli:latest "$WORKDIR"
 echo "🗸 nexus-cli:latest built"
 
 # —————————————————————————————————————————————
-# 5) Setup config dir & register wallet
+# 6) Setup config dir & register wallet
 mkdir -p "$CONFIG_DIR"
-echo "🔑 Registering wallet $WALLET_ADDRESS…"
+echo "🔑 Registering wallet $WALLET_ADDRESS..."
 if ! docker run --rm -v "$CONFIG_DIR":/root/.nexus nexus-cli:latest \
      register-user --wallet-address "$WALLET_ADDRESS"; then
-  echo "⚠️ Wallet mungkin sudah terdaftar, lanjut…"
+  echo "⚠️ Wallet mungkin sudah terdaftar, lanjutkan..."
 else
   echo "🗸 register-user OK"
 fi
 
-# —————————————————————————————————————————————
-# 6) Tulis config.json agar non-interaktif
+# 7) Tulis config.json agar non-interaktif
 cat > "$CONFIG_DIR/config.json" << EOF
 {"node_id":"$NODE_ID"}
 EOF
 
 # —————————————————————————————————————————————
-# 7) Jalankan headless node detached
+# 8) Jalankan headless node detached
 docker run -d --name nexus-node \
   --network host \
   --device /dev/net/tun \
@@ -122,13 +119,12 @@ docker run -d --name nexus-node \
   -v /etc/resolv.conf:/etc/resolv.conf:ro \
   --restart unless-stopped \
   nexus-cli:latest start --node-id "$NODE_ID"
-
 echo
-echo "✅ Node Nexus berjalan di container 'nexus-node' (detached)."
-echo "   Pantau log: docker logs -f nexus-node"
+echo "✅ Node Nexus running in 'nexus-node' (detached)."
+echo "   Logs: docker logs -f nexus-node"
 
 # —————————————————————————————————————————————
-# 8) Jalankan debug interaktif + TUI
+# 9) Jalankan debug interaktif + TUI
 docker run --rm -it \
   --entrypoint /bin/sh \
   -v "$CONFIG_DIR":/root/.nexus \
@@ -154,5 +150,5 @@ docker run --rm -it \
       sleep 0.5
     done
     echo
-    exec nexus-network start --node-id \$NODE_ID
+    exec nexus-network start --node-id $NODE_ID
   "
