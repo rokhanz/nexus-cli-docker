@@ -61,7 +61,13 @@ docker-compose --profile interactive up
 ```bash
 ./install.sh
 ```
-Enhanced installer with better validation and error handling.
+Enhanced installer with better validation, error handling, and auto-update functionality.
+
+### Method 4: Update Existing Installation
+```bash
+./update-nexus.sh
+```
+Dedicated script to update Nexus CLI to the latest version with backup and restore functionality.
 
 ## ⚙️ Configuration
 
@@ -257,12 +263,16 @@ This will remove:
 ```
 nexus-cli-docker/
 ├── run-nexus.sh          # Original all-in-one script
-├── install.sh            # Enhanced installer
+├── install.sh            # Enhanced installer with auto-update
+├── update-nexus.sh       # Dedicated Nexus CLI updater
 ├── uninstall.sh          # Clean removal script
+├── setup-permissions.sh  # Script permissions setup
 ├── Dockerfile            # Docker image definition
 ├── docker-compose.yml    # Docker Compose configuration
 ├── .env.example          # Environment template
 ├── .gitignore           # Git ignore rules
+├── LICENSE              # MIT license
+├── CHANGELOG.md         # Version history
 └── README.md            # This file
 ```
 
