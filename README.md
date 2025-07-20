@@ -1,4 +1,4 @@
-# Nexus Node Runner (Docker + Interactive)
+# Nexus Testnet III Node Runner (Docker + Interactive)
 
 A complete solution to run your Nexus prover node via Docker—avoiding the native-CLI crash on Ubuntu 22.04.
 
