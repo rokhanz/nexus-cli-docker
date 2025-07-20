@@ -1,0 +1,43 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Nexus configuration
+.nexus/
+nexus-cli-docker/.nexus/
+
+# Docker
+.dockerignore
+
+# Logs
+*.log
+logs/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backup files
+*.backup
+*.bak
+*.tmp
+
+# Node modules (if any)
+node_modules/
+
+# Build artifacts
+dist/
+build/
