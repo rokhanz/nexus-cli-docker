@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker daemon status checking
 - Permission issues with scripts
 - Auto-update logic for Nexus CLI installations
+- Enhanced run-nexus.sh with better error handling and logging
+- Improved user experience in original script with ROKHANZ branding
 
 ## [1.0.0] - 2024-01-XX
 
