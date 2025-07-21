@@ -1,291 +1,443 @@
-# Nexus Testnet III Node Runner (Docker + Interactive)
+# 🚀 NEXUS MANAGER - ALL-IN-ONE SCRIPT GUIDE
 
-A complete solution to run your Nexus prover node via Docker—avoiding the native-CLI crash on Ubuntu 22.04.
+## 📋 OVERVIEW
 
-[![Docker](https://img.shields.io/badge/Docker-Required-blue.svg)](https://www.docker.com/)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04-orange.svg)](https://ubuntu.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-
-## 🚀 Quick Start
-
-### One-liner Installation
-```bash
-wget -O ~/run-nexus.sh https://raw.githubusercontent.com/rokhanz/nexus-cli-docker/main/run-nexus.sh && chmod +x ~/run-nexus.sh && ~/run-nexus.sh
-```
-
-## 📋 Prerequisites
-
-- **Operating System**: Ubuntu 22.04 LTS (recommended)
-- **Docker**: Version 20.10+ with Docker Compose
-- **Memory**: At least 2GB RAM
-- **Storage**: At least 10GB free space
-- **Network**: Stable internet connection
-- **Privileges**: Root access for Docker installation
-
-## 🛠️ Installation Methods
-
-### Method 1: Using the Original Script
-```bash
-./run-nexus.sh
-```
-This script will:
-- Install Docker if not present
-- Build the Nexus CLI image
-- Set up configuration
-- Run both headless and interactive modes
-
-### Method 2: Using Docker Compose
-```bash
-# Background mode
-docker-compose up -d
-
-# Interactive mode
-docker-compose --profile interactive up
-```
-
-### Method 3: Using the New Installer
-```bash
-./install.sh
-```
-Enhanced installer with better validation, error handling, and auto-update functionality.
-
-### Method 4: Update Existing Installation
-```bash
-./update-nexus.sh
-```
-Dedicated script to update Nexus CLI to the latest version with backup and restore functionality.
-
-## ⚙️ Configuration
-
-### Environment Variables
-
-Copy `.env.example` to `.env` and configure:
-
-```bash
-cp .env.example .env
-```
-
-Required variables:
-- `WALLET_ADDRESS`: Your Ethereum wallet address (0x...)
-- `NODE_ID`: Your unique node identifier
-
-Optional variables:
-- `CONFIG_DIR`: Custom configuration directory (default: ~/.nexus)
-- `NETWORK_MODE`: Docker network mode (default: host)
-- `DEBUG`: Enable debug mode (default: false)
-
-### Wallet Address Format
-Your wallet address must:
-- Start with `0x`
-- Be exactly 42 characters long
-- Contain only hexadecimal characters (0-9, a-f, A-F)
-
-Example: `0x1234567890123456789012345678901234567890`
-
-## 🐳 Docker Commands
-
-### Basic Operations
-```bash
-# Check running containers
-docker ps
-
-# View logs
-docker logs -f nexus-node
-
-# Stop the node
-docker stop nexus-node
-
-# Restart the node
-docker restart nexus-node
-
-# Remove container
-docker rm nexus-node
-```
-
-### Troubleshooting Commands
-```bash
-# Check Docker daemon status
-docker info
-
-# Test network connectivity
-docker run --rm nexus-cli:latest ping -c3 production.orchestrator.nexus.xyz
-
-# Check health
-curl -s https://production.orchestrator.nexus.xyz/v3/health
-
-# Interactive shell
-docker run --rm -it nexus-cli:latest /bin/sh
-```
-
-## 📊 Monitoring
-
-### Health Checks
-The Docker Compose setup includes automatic health checks:
-- Endpoint: `https://production.orchestrator.nexus.xyz/v3/health`
-- Interval: 30 seconds
-- Timeout: 10 seconds
-- Retries: 3
-
-### Log Monitoring
-```bash
-# Follow logs in real-time
-docker logs -f nexus-node
-
-# View last 100 lines
-docker logs --tail 100 nexus-node
-
-# View logs with timestamps
-docker logs -t nexus-node
-```
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-#### 1. Docker Permission Denied
-```bash
-# Add user to docker group
-sudo usermod -aG docker $USER
-# Logout and login again
-```
-
-#### 2. Port Already in Use
-```bash
-# Check what's using the port
-sudo netstat -tulpn | grep :PORT_NUMBER
-# Kill the process or change port
-```
-
-#### 3. Network Issues
-```bash
-# Test connectivity
-ping production.orchestrator.nexus.xyz
-# Check DNS resolution
-nslookup production.orchestrator.nexus.xyz
-```
-
-#### 4. Container Won't Start
-```bash
-# Check container logs
-docker logs nexus-node
-# Check system resources
-docker system df
-# Clean up unused resources
-docker system prune
-```
-
-#### 5. Wallet Registration Failed
-```bash
-# Verify wallet address format
-echo $WALLET_ADDRESS | grep -E '^0x[a-fA-F0-9]{40}$'
-# Try manual registration
-docker run --rm -v ~/.nexus:/root/.nexus nexus-cli:latest register-user --wallet-address $WALLET_ADDRESS
-```
-
-### Performance Issues
-
-#### High CPU Usage
-- Check if multiple instances are running
-- Monitor with `docker stats nexus-node`
-- Consider resource limits in docker-compose.yml
-
-#### Memory Issues
-- Monitor memory usage: `docker stats --no-stream nexus-node`
-- Check available system memory: `free -h`
-- Add swap if needed: `sudo fallocate -l 2G /swapfile`
-
-### Network Troubleshooting
-
-#### Connection Timeouts
-```bash
-# Test orchestrator connectivity
-curl -v https://production.orchestrator.nexus.xyz/v3/health
-
-# Check DNS resolution
-dig production.orchestrator.nexus.xyz
-
-# Test with different DNS
-docker run --rm --dns 8.8.8.8 nexus-cli:latest ping -c3 production.orchestrator.nexus.xyz
-```
-
-## 🔄 Updates
-
-### Updating the Node
-```bash
-# Pull latest changes
-git pull origin main
-
-# Rebuild image
-docker build -t nexus-cli:latest .
-
-# Restart with new image
-docker-compose down
-docker-compose up -d
-```
-
-### Updating Docker
-```bash
-# Update Docker
-sudo apt update && sudo apt upgrade docker-ce docker-ce-cli containerd.io
-```
-
-## 🗑️ Uninstallation
-
-To completely remove Nexus CLI Docker:
-
-```bash
-chmod +x uninstall.sh
-./uninstall.sh
-```
-
-This will remove:
-- All containers and images
-- Configuration directory (~/.nexus)
-- Environment files
-- Auto-load from ~/.bashrc
-
-## 📁 File Structure
-
-```
-nexus-cli-docker/
-├── run-nexus.sh          # Original all-in-one script
-├── install.sh            # Enhanced installer with auto-update
-├── update-nexus.sh       # Dedicated Nexus CLI updater
-├── uninstall.sh          # Clean removal script
-├── setup-permissions.sh  # Script permissions setup
-├── Dockerfile            # Docker image definition
-├── docker-compose.yml    # Docker Compose configuration
-├── .env.example          # Environment template
-├── .gitignore           # Git ignore rules
-├── LICENSE              # MIT license
-├── CHANGELOG.md         # Version history
-└── README.md            # This file
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-- **Issues**: [GitHub Issues](https://github.com/rokhanz/nexus-cli-docker/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/rokhanz/nexus-cli-docker/discussions)
-- **Documentation**: This README and inline comments
-
-## 🔗 Links
-
-- [Nexus Network](https://nexus.xyz/)
-- [Docker Documentation](https://docs.docker.com/)
-- [Ubuntu 22.04 LTS](https://ubuntu.com/download/desktop)
+**nexus-manager.sh** adalah script all-in-one yang menggabungkan semua fungsi untuk mengelola Nexus CLI Docker dalam satu file. Script ini mencakup instalasi, uninstall, dan manajemen node dengan menggunakan screen session.
 
 ---
 
-**⚠️ Disclaimer**: This is an unofficial Docker wrapper for Nexus CLI. Use at your own risk and always backup your configuration before making changes.
+## ✨ FITUR UTAMA
+
+### 🔧 **All-in-One Management**
+- ✅ Install Nexus CLI Docker
+- ✅ Uninstall lengkap dengan cleanup
+- ✅ Start/Stop/Restart node
+- ✅ Status monitoring
+- ✅ Log viewing
+- ✅ Screen session management
+
+### 🐳 **Auto Docker Installation**
+- ✅ Support 6 OS: Ubuntu, Debian, CentOS, RHEL, Fedora, Arch Linux
+- ✅ Auto-detect package manager
+- ✅ Install Docker otomatis jika belum ada
+
+### 📺 **Screen Session Integration**
+- ✅ Jalankan Nexus dalam screen session bernama "nexus"
+- ✅ Background execution yang persistent
+- ✅ Easy attach/detach functionality
+
+### 🛡️ **Robust Error Handling**
+- ✅ Retry mechanism dengan exponential backoff
+- ✅ Auto-cleanup saat error
+- ✅ System validation
+- ✅ Graceful error recovery
+
+---
+
+## 🚀 QUICK START
+
+### **Download & Setup**
+```bash
+# Download script
+wget -O ~/nexus-manager.sh https://raw.githubusercontent.com/rokhanz/nexus-cli-docker/main/nexus-manager.sh
+
+# Make executable
+chmod +x ~/nexus-manager.sh
+
+# Show help
+~/nexus-manager.sh help
+```
+
+### **Basic Usage**
+```bash
+# Install Nexus
+~/nexus-manager.sh install
+
+# Start node
+~/nexus-manager.sh start
+
+# Check status
+~/nexus-manager.sh status
+
+# View logs
+~/nexus-manager.sh logs
+
+# Attach to screen session
+~/nexus-manager.sh attach
+# atau langsung: screen -r nexus
+
+# Stop node
+~/nexus-manager.sh stop
+```
+
+---
+
+## 📚 COMMAND REFERENCE
+
+### **install**
+Menginstall Nexus CLI Docker lengkap dengan dependencies.
+
+```bash
+~/nexus-manager.sh install
+```
+
+**Yang dilakukan:**
+- ✅ Validasi sistem (OS, memory, disk space)
+- ✅ Install screen jika belum ada
+- ✅ Install Docker jika belum ada (auto-detect OS)
+- ✅ Setup environment variables (.env file)
+- ✅ Build Docker image nexus-cli:latest
+- ✅ Register wallet address
+- ✅ Setup konfigurasi
+
+**Input yang diperlukan:**
+- `WALLET_ADDRESS`: Alamat wallet Ethereum (format: 0x...)
+- `NODE_ID`: ID unik untuk node Anda
+
+### **start**
+Memulai Nexus node dalam screen session.
+
+```bash
+~/nexus-manager.sh start
+```
+
+**Yang dilakukan:**
+- ✅ Load environment variables
+- ✅ Check dan stop container lama jika ada
+- ✅ Buat screen session bernama "nexus"
+- ✅ Jalankan Docker container dalam screen session
+- ✅ Verifikasi status startup
+
+**Screen Session:**
+- Nama session: `nexus`
+- Attach: `screen -r nexus`
+- Detach: `Ctrl+A+D`
+
+### **stop**
+Menghentikan Nexus node dan screen session.
+
+```bash
+~/nexus-manager.sh stop
+```
+
+**Yang dilakukan:**
+- ✅ Stop Docker container nexus-node
+- ✅ Quit screen session "nexus"
+- ✅ Cleanup resources
+
+### **restart**
+Restart Nexus node (stop + start).
+
+```bash
+~/nexus-manager.sh restart
+```
+
+### **status**
+Menampilkan status lengkap Nexus node.
+
+```bash
+~/nexus-manager.sh status
+```
+
+**Informasi yang ditampilkan:**
+- 🐳 Status Docker container
+- 📺 Status screen session
+- ⚙️ Environment variables
+- 📊 Resource usage
+
+### **logs**
+Menampilkan logs Nexus node.
+
+```bash
+~/nexus-manager.sh logs
+```
+
+**Opsi viewing:**
+- Jika container berjalan: `docker logs -f nexus-node`
+- Jika hanya screen session: instruksi attach ke screen
+
+### **attach**
+Attach ke screen session untuk melihat output real-time.
+
+```bash
+~/nexus-manager.sh attach
+```
+
+**Keyboard shortcuts dalam screen:**
+- `Ctrl+A+D`: Detach dari session
+- `Ctrl+A+K`: Kill session
+- `Ctrl+A+?`: Help
+
+### **uninstall**
+Uninstall lengkap Nexus CLI Docker.
+
+```bash
+~/nexus-manager.sh uninstall
+```
+
+**Yang dihapus:**
+- ✅ Stop semua services
+- ✅ Remove Docker containers dan images
+- ✅ Hapus direktori konfigurasi (~/.nexus)
+- ✅ Hapus working directory (~/nexus-cli-docker)
+- ✅ Remove auto-load dari ~/.bashrc
+- ✅ Docker system cleanup
+
+**⚠️ WARNING:** Semua data dan konfigurasi akan dihapus permanen!
+
+---
+
+## 📁 FILE STRUCTURE
+
+```
+~/nexus-cli-docker/
+├── .env                    # Environment variables
+├── Dockerfile             # Docker image definition
+└── config/
+
+~/.nexus/
+├── config.json            # Node configuration
+└── [nexus-cli files]      # Nexus CLI installation
+
+~/.bashrc
+└── [auto-load .env]       # Environment auto-loading
+```
+
+---
+
+## 🔧 CONFIGURATION
+
+### **Environment Variables (.env)**
+```bash
+# Nexus Node configuration
+WALLET_ADDRESS=0x1234567890123456789012345678901234567890
+NODE_ID=your-unique-node-id
+DEBUG=false
+```
+
+### **Node Configuration (config.json)**
+```json
+{
+    "node_id": "your-unique-node-id",
+    "created_at": "2024-01-01T00:00:00Z",
+    "wallet_address": "0x1234567890123456789012345678901234567890"
+}
+```
+
+---
+
+## 🐛 TROUBLESHOOTING
+
+### **Common Issues**
+
+#### 1. **Screen session tidak ditemukan**
+```bash
+# Check active sessions
+screen -list
+
+# Jika tidak ada, start ulang
+~/nexus-manager.sh start
+```
+
+#### 2. **Docker container tidak berjalan**
+```bash
+# Check container status
+docker ps -a
+
+# Check logs
+docker logs nexus-node
+
+# Restart jika perlu
+~/nexus-manager.sh restart
+```
+
+#### 3. **Permission denied**
+```bash
+# Make sure script executable
+chmod +x ~/nexus-manager.sh
+
+# Check Docker permissions
+sudo usermod -aG docker $USER
+# Logout dan login kembali
+```
+
+#### 4. **Environment variables tidak loaded**
+```bash
+# Check .env file
+cat ~/nexus-cli-docker/.env
+
+# Reload bashrc
+source ~/.bashrc
+
+# Atau reinstall
+~/nexus-manager.sh uninstall
+~/nexus-manager.sh install
+```
+
+### **Debug Mode**
+```bash
+# Enable debug mode
+export DEBUG=true
+~/nexus-manager.sh [command]
+
+# Atau edit .env file
+echo "DEBUG=true" >> ~/nexus-cli-docker/.env
+```
+
+---
+
+## 📊 MONITORING
+
+### **Real-time Monitoring**
+```bash
+# Attach ke screen session
+screen -r nexus
+
+# Atau view logs
+~/nexus-manager.sh logs
+
+# Check resource usage
+docker stats nexus-node
+```
+
+### **Status Checks**
+```bash
+# Full status
+~/nexus-manager.sh status
+
+# Quick container check
+docker ps | grep nexus-node
+
+# Quick screen check
+screen -list | grep nexus
+```
+
+### **Health Checks**
+```bash
+# Test network connectivity
+curl -s https://production.orchestrator.nexus.xyz/v3/health
+
+# Check Docker daemon
+docker info
+
+# Check system resources
+df -h
+free -h
+```
+
+---
+
+## 🔄 MAINTENANCE
+
+### **Regular Tasks**
+```bash
+# Check status
+~/nexus-manager.sh status
+
+# View logs untuk errors
+~/nexus-manager.sh logs
+
+# Restart jika diperlukan
+~/nexus-manager.sh restart
+```
+
+### **Updates**
+```bash
+# Download script terbaru
+wget -O ~/nexus-manager.sh https://raw.githubusercontent.com/rokhanz/nexus-cli-docker/main/nexus-manager.sh
+chmod +x ~/nexus-manager.sh
+
+# Rebuild image dengan update terbaru
+~/nexus-manager.sh stop
+docker rmi nexus-cli:latest
+~/nexus-manager.sh start
+```
+
+### **Backup Configuration**
+```bash
+# Backup environment
+cp ~/nexus-cli-docker/.env ~/nexus-env-backup.env
+
+# Backup node config
+cp ~/.nexus/config.json ~/nexus-config-backup.json
+```
+
+---
+
+## 🎯 BEST PRACTICES
+
+### **Security**
+- ✅ Jangan share WALLET_ADDRESS dan NODE_ID
+- ✅ Backup file .env di tempat aman
+- ✅ Gunakan strong NODE_ID yang unik
+- ✅ Monitor logs secara berkala
+
+### **Performance**
+- ✅ Pastikan sistem memiliki minimal 2GB RAM
+- ✅ Monitor disk space (minimal 10GB free)
+- ✅ Restart node secara berkala jika diperlukan
+- ✅ Clean up Docker resources: `docker system prune`
+
+### **Reliability**
+- ✅ Gunakan screen session untuk persistence
+- ✅ Monitor status node secara berkala
+- ✅ Setup monitoring alerts jika diperlukan
+- ✅ Backup konfigurasi secara berkala
+
+---
+
+## 🆘 SUPPORT
+
+### **Getting Help**
+```bash
+# Show help
+~/nexus-manager.sh help
+
+# Check version info
+~/nexus-manager.sh status
+
+# Debug mode
+DEBUG=true ~/nexus-manager.sh [command]
+```
+
+### **Common Commands**
+```bash
+# Quick status check
+~/nexus-manager.sh status
+
+# Restart if issues
+~/nexus-manager.sh restart
+
+# View real-time output
+screen -r nexus
+
+# Emergency stop
+~/nexus-manager.sh stop
+```
+
+---
+
+## 📝 CHANGELOG
+
+### **Version 2.0 (All-in-One)**
+- ✅ Unified script dengan semua fungsi
+- ✅ Screen session integration
+- ✅ Auto Docker installation
+- ✅ Comprehensive error handling
+- ✅ Multi-OS support
+- ✅ Enhanced monitoring dan logging
+
+### **Key Improvements dari Original**
+- 🔧 Path resolution bug fixed
+- 🐳 Auto Docker installation
+- 📺 Screen session management
+- 🛡️ Robust error handling
+- 🌐 Network resilience
+- 📊 Enhanced monitoring
+
+---
+
+**Generated by:** ROKHANZ Nexus CLI Docker Team  
+**Date:** $(date)  
+**Version:** 2.0 (All-in-One Manager)  
+**Status:** ✅ Production Ready
