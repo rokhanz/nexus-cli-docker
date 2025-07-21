@@ -8,25 +8,9 @@ A complete solution to run your Nexus prover node via Docker—avoiding the nati
 
 ## 🚀 Quick Start
 
-### Option 1: One-liner Installation (Recommended)
+### One-liner Installation
 ```bash
 wget -O ~/run-nexus.sh https://raw.githubusercontent.com/rokhanz/nexus-cli-docker/main/run-nexus.sh && chmod +x ~/run-nexus.sh && ~/run-nexus.sh
-```
-
-### Option 2: Manual Installation
-```bash
-# Clone the repository
-git clone https://github.com/rokhanz/nexus-cli-docker.git
-cd nexus-cli-docker
-
-# Run the installer
-chmod +x setup-permission.sh
-./setup-permission.sh
-./install.sh
-./run-nexus.sh
-
-# Start the node
-docker-compose up -d
 ```
 
 ## 📋 Prerequisites
