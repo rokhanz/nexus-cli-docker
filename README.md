@@ -20,8 +20,10 @@ git clone https://github.com/rokhanz/nexus-cli-docker.git
 cd nexus-cli-docker
 
 # Run the installer
-chmod +x install.sh
+chmod +x setup-permission.sh
+./setup-permission.sh
 ./install.sh
+./run-nexus.sh
 
 # Start the node
 docker-compose up -d
