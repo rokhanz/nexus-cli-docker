@@ -411,23 +411,41 @@ EOF
 start_nexus() {
     log_info "🚀 Memulai Nexus node dalam screen session..."
     
-    # Load environment
-    if [ -f "$ENV_FILE" ]; then
-        set -a
-        source "$ENV_FILE"
-        set +a
-    else
+    # Check prerequisites
+    if [ ! -f "$ENV_FILE" ]; then
         log_error "File .env tidak ditemukan. Jalankan '$0 install' terlebih dahulu."
+        log_info "Atau jalankan: $0 install"
         exit 1
     fi
     
+    # Check Docker image
+    if ! docker images --format '{{.Repository}}:{{.Tag}}' | grep -q '^nexus-cli:latest$'; then
+        log_error "Docker image nexus-cli:latest tidak ditemukan. Jalankan '$0 install' terlebih dahulu."
+        exit 1
+    fi
+    
+    # Load environment
+    set -a
+    source "$ENV_FILE"
+    set +a
+    
+    # Validate environment variables
+    if [[ -z "${WALLET_ADDRESS:-}" ]] || [[ -z "${NODE_ID:-}" ]]; then
+        log_error "Environment variables tidak lengkap. Jalankan '$0 install' untuk setup ulang."
+        exit 1
+    fi
+    
+    log_info "Loaded WALLET_ADDRESS: ${WALLET_ADDRESS:0:10}..."
+    log_info "Loaded NODE_ID: $NODE_ID"
+    
     # Check jika screen session sudah ada
-    if screen -list | grep -q "$SCREEN_SESSION"; then
+    if screen -list 2>/dev/null | grep -q "$SCREEN_SESSION"; then
         log_warning "Screen session '$SCREEN_SESSION' sudah ada"
-        read -p "Apakah ingin menghentikan session yang ada dan membuat yang baru? (y/n): " -n 1 -r
-        echo
+        echo -n "Apakah ingin menghentikan session yang ada dan membuat yang baru? (y/n): "
+        read -r REPLY
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             screen -S $SCREEN_SESSION -X quit 2>/dev/null || true
+            sleep 2
             log_info "Session lama dihentikan"
         else
             log_info "Gunakan 'screen -r $SCREEN_SESSION' untuk attach ke session yang ada"
@@ -436,32 +454,91 @@ start_nexus() {
     fi
     
     # Stop container lama jika ada
+    log_info "Membersihkan container lama..."
+    docker stop nexus-node 2>/dev/null || true
     docker rm -f nexus-node 2>/dev/null || true
     
-    # Start container dalam screen session
-    log_info "Membuat screen session '$SCREEN_SESSION'..."
-    screen -dmS $SCREEN_SESSION bash -c "
-        echo 'Starting Nexus node in Docker container...'
-        docker run --name nexus-node \
-            --network host \
-            --device /dev/net/tun \
-            --cap-add NET_ADMIN \
-            -v '$CONFIG_DIR':/root/.nexus \
-            -v /etc/resolv.conf:/etc/resolv.conf:ro \
-            --restart unless-stopped \
-            nexus-cli:latest start --node-id '$NODE_ID'
-    "
+    # Check screen installation
+    if ! command -v screen &> /dev/null; then
+        log_error "Screen tidak terinstall. Jalankan '$0 install' untuk install dependencies."
+        exit 1
+    fi
     
-    sleep 3
+    # Start container langsung tanpa screen session dulu untuk testing
+    log_info "Memulai Docker container..."
     
-    # Check status
-    if screen -list | grep -q "$SCREEN_SESSION"; then
-        log_success "✅ Nexus node berhasil dimulai dalam screen session '$SCREEN_SESSION'"
-        log_info "📊 Gunakan 'screen -r $SCREEN_SESSION' untuk melihat output"
-        log_info "📋 Gunakan '$0 status' untuk melihat status"
-        log_info "⏹️  Gunakan '$0 stop' untuk menghentikan"
+    # Check if /dev/net/tun exists
+    if [ -e /dev/net/tun ]; then
+        log_info "Using /dev/net/tun device"
+        DEVICE_ARGS="--device /dev/net/tun --cap-add NET_ADMIN"
     else
-        log_error "Gagal membuat screen session"
+        log_warning "Warning: /dev/net/tun not available, running without TUN device"
+        DEVICE_ARGS="--cap-add NET_ADMIN"
+    fi
+    
+    # Start container in background
+    # Note: We mount config to /nexus-config to avoid overwriting /root/.nexus which contains the binary
+    docker run -d --name nexus-node \
+        --network host \
+        $DEVICE_ARGS \
+        -v "$CONFIG_DIR":/nexus-config \
+        -v /etc/resolv.conf:/etc/resolv.conf:ro \
+        --restart unless-stopped \
+        --entrypoint /bin/sh \
+        nexus-cli:latest -c "
+            # Copy config files if they exist
+            if [ -f /nexus-config/config.json ]; then
+                cp /nexus-config/config.json /root/.nexus/
+            fi
+            # Run nexus-network
+            exec /root/.nexus/bin/nexus-network start --headless --node-id $NODE_ID
+        "
+    
+    # Wait and check container
+    sleep 5
+    
+    if docker ps --filter "name=nexus-node" --format "{{.Names}}" | grep -q "nexus-node"; then
+        log_success "✅ Container nexus-node berhasil berjalan"
+        
+        # Now create screen session to monitor
+        log_info "Membuat screen session untuk monitoring..."
+        screen -dmS $SCREEN_SESSION bash -c "
+            echo '=== Nexus Node Monitor ==='
+            echo 'Container: nexus-node'
+            echo 'WALLET_ADDRESS: ${WALLET_ADDRESS:0:10}...'
+            echo 'NODE_ID: $NODE_ID'
+            echo 'Time: $(date)'
+            echo '=========================='
+            echo 'Following Docker logs...'
+            echo
+            docker logs -f nexus-node
+        "
+        
+        sleep 2
+        
+        if screen -list 2>/dev/null | grep -q "$SCREEN_SESSION"; then
+            log_success "✅ Screen session '$SCREEN_SESSION' berhasil dibuat untuk monitoring"
+        else
+            log_warning "⚠️  Screen session gagal dibuat, tapi container berjalan"
+        fi
+        
+        echo
+        log_success "🎉 Nexus node berhasil dimulai!"
+        log_info "📊 Container: docker ps | grep nexus-node"
+        log_info "📋 Logs: docker logs -f nexus-node"
+        log_info "📺 Screen: screen -r $SCREEN_SESSION (jika tersedia)"
+        log_info "📊 Status: $0 status"
+        log_info "⏹️  Stop: $0 stop"
+        echo
+        
+    else
+        log_error "❌ Container gagal berjalan"
+        log_info "Checking container status..."
+        docker ps -a --filter "name=nexus-node"
+        
+        log_info "Container logs:"
+        docker logs nexus-node 2>/dev/null || log_info "No logs available"
+        
         exit 1
     fi
 }
