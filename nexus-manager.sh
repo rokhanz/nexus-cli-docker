@@ -163,6 +163,24 @@ install_screen() {
     else
         log_success "Screen sudah terinstall"
     fi
+    
+    # Test screen functionality
+    log_info "Testing screen functionality..."
+    if screen -v >/dev/null 2>&1; then
+        SCREEN_VERSION=$(screen -v 2>&1 | head -1)
+        log_success "Screen berfungsi: $SCREEN_VERSION"
+    else
+        log_warning "Screen terinstall tapi tidak berfungsi dengan baik"
+    fi
+    
+    # Pastikan direktori screen ada
+    mkdir -p /run/screen 2>/dev/null || true
+    mkdir -p /tmp/screen 2>/dev/null || true
+    
+    # Set permissions jika perlu
+    if [[ -d /run/screen ]]; then
+        chmod 755 /run/screen 2>/dev/null || true
+    fi
 }
 
 # Install Docker
@@ -225,20 +243,6 @@ install_docker() {
 
 # Setup environment variables
 setup_env() {
-    # Setup auto-load .env di ~/.bashrc
-    LOAD_SNIPPET="# Auto-load Nexus env
-if [ -f \"$ENV_FILE\" ]; then 
-    set -a
-    source \"$ENV_FILE\"
-    set +a
-fi"
-
-    if ! grep -q "Auto-load Nexus env" "$BASHRC" 2>/dev/null; then
-        echo "" >> "$BASHRC"
-        echo "$LOAD_SNIPPET" >> "$BASHRC"
-        log_success "Menambahkan auto-load .env ke $BASHRC"
-    fi
-
     # Load atau buat .env
     if [ -f "$ENV_FILE" ]; then
         log_info "Memuat environment dari $ENV_FILE"
@@ -390,18 +394,15 @@ install_nexus() {
     
     # Register wallet
     log_info "Registering wallet $WALLET_ADDRESS..."
-    docker run --rm -v "$CONFIG_DIR":/root/.nexus nexus-cli:latest \
+    docker run --rm nexus-cli:latest \
         register-user --wallet-address "$WALLET_ADDRESS" 2>/dev/null || \
         log_warning "Wallet mungkin sudah terdaftar"
     
-    # Setup config.json
-    cat > "$CONFIG_DIR/config.json" << EOF
-{
-    "node_id": "$NODE_ID",
-    "created_at": "$(date -Iseconds)",
-    "wallet_address": "$WALLET_ADDRESS"
-}
-EOF
+    # Register node
+    log_info "Registering node $NODE_ID..."
+    docker run --rm nexus-cli:latest \
+        register-node --node-id "$NODE_ID" 2>/dev/null || \
+        log_warning "Node mungkin sudah terdaftar"
     
     log_success "✅ Instalasi Nexus CLI Docker berhasil!"
     log_info "Gunakan '$0 start' untuk menjalankan node"
@@ -549,17 +550,101 @@ stop_nexus() {
     
     # Stop Docker container
     if docker ps --filter "name=nexus-node" --filter "status=running" | grep -q nexus-node; then
+        log_info "Menghentikan container nexus-node..."
         docker stop nexus-node
         log_success "Container nexus-node dihentikan"
+    else
+        log_info "Container nexus-node tidak berjalan"
+    fi
+    
+    # Remove container
+    if docker ps -a --filter "name=nexus-node" | grep -q nexus-node; then
+        docker rm nexus-node 2>/dev/null || true
+        log_info "Container nexus-node dihapus"
     fi
     
     # Quit screen session
-    if screen -list | grep -q "$SCREEN_SESSION"; then
-        screen -S $SCREEN_SESSION -X quit
+    if screen -list | grep -q "$SCREEN_SESSION" 2>/dev/null; then
+        screen -S $SCREEN_SESSION -X quit 2>/dev/null || true
         log_success "Screen session '$SCREEN_SESSION' dihentikan"
+    else
+        log_info "Screen session tidak aktif"
     fi
     
+    # Cleanup temp files
+    rm -f /tmp/nexus-start.sh 2>/dev/null || true
+    
     log_success "✅ Nexus node berhasil dihentikan"
+}
+
+# Debug system
+debug_system() {
+    log_info "🔍 Debugging System Information:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    echo -e "${BLUE}Screen Information:${NC}"
+    echo "Screen version: $(screen -v 2>&1 | head -1 || echo 'Screen error')"
+    echo "Screen directories:"
+    echo "  /run/screen: $(ls -la /run/screen 2>/dev/null || echo 'tidak ada')"
+    echo "  /tmp/screen: $(ls -la /tmp/screen 2>/dev/null || echo 'tidak ada')"
+    echo "Screen sessions: $(screen -list 2>&1 || echo 'tidak ada')"
+    echo
+    
+    echo -e "${BLUE}Docker Information:${NC}"
+    echo "Docker version: $(docker --version 2>/dev/null || echo 'Docker tidak tersedia')"
+    echo "Docker status: $(systemctl is-active docker 2>/dev/null || echo 'unknown')"
+    echo "Docker containers:"
+    docker ps -a --filter "name=nexus" 2>/dev/null || echo "  Tidak ada container nexus"
+    echo
+    
+    echo -e "${BLUE}Environment Files:${NC}"
+    echo "ENV_FILE: $ENV_FILE"
+    echo "  Exists: $([ -f "$ENV_FILE" ] && echo 'Yes' || echo 'No')"
+    if [ -f "$ENV_FILE" ]; then
+        echo "  Content:"
+        cat "$ENV_FILE" | sed 's/^/    /'
+    fi
+    echo
+    
+    echo -e "${BLUE}Network Information:${NC}"
+    echo "TUN device: $(ls -la /dev/net/tun 2>/dev/null || echo 'tidak tersedia')"
+    echo "Network interfaces:"
+    ip link show 2>/dev/null | grep -E '^[0-9]+:' | head -5 || echo "  Error getting interfaces"
+    echo
+    
+    echo -e "${BLUE}System Resources:${NC}"
+    echo "Memory: $(free -h | grep '^Mem:' || echo 'Error getting memory info')"
+    echo "Disk space: $(df -h / | tail -1 || echo 'Error getting disk info')"
+    echo "Load average: $(cat /proc/loadavg 2>/dev/null || echo 'Error getting load')"
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+}
+
+# Show detailed container info
+show_container_info() {
+    log_info "📊 Detail Container Nexus Node:"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    
+    if docker ps -a --filter "name=nexus-node" | grep -q nexus-node; then
+        echo -e "${BLUE}Container Details:${NC}"
+        docker ps -a --filter "name=nexus-node"
+        echo
+        
+        echo -e "${BLUE}Port Mappings:${NC}"
+        docker port nexus-node 2>/dev/null || echo "Menggunakan --network host (semua port host)"
+        echo
+        
+        echo -e "${BLUE}Container Inspect (Network):${NC}"
+        docker inspect nexus-node --format='{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' 2>/dev/null || echo "Container tidak berjalan"
+        echo
+        
+        echo -e "${BLUE}Resource Usage:${NC}"
+        docker stats nexus-node --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" 2>/dev/null || echo "Container tidak berjalan"
+    else
+        echo -e "${YELLOW}Container nexus-node tidak ditemukan${NC}"
+    fi
+    
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 }
 
 # Show status
@@ -568,9 +653,9 @@ show_status() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     
     # Docker container status
-    if docker ps -a --filter "name=nexus-node" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | grep -q nexus-node; then
+    if docker ps -a --filter "name=nexus-node" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}" | grep -q nexus-node; then
         echo -e "${BLUE}Docker Container:${NC}"
-        docker ps -a --filter "name=nexus-node" --format "table {{.Names}}\t{{.Status}}\t{{.Image}}"
+        docker ps -a --filter "name=nexus-node" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}"
     else
         echo -e "${YELLOW}Docker Container: Tidak ditemukan${NC}"
     fi
@@ -671,6 +756,8 @@ show_help() {
     echo -e "  ${GREEN}stop${NC}        - Stop Nexus node dan screen session"
     echo -e "  ${GREEN}restart${NC}     - Restart Nexus node"
     echo -e "  ${GREEN}status${NC}      - Tampilkan status Nexus node"
+    echo -e "  ${GREEN}info${NC}        - Tampilkan detail container (port, network, resource)"
+    echo -e "  ${GREEN}debug${NC}       - Debug system (screen, docker, environment)"
     echo -e "  ${GREEN}logs${NC}        - Tampilkan logs Nexus node"
     echo -e "  ${GREEN}attach${NC}      - Attach ke screen session"
     echo -e "  ${GREEN}uninstall${NC}   - Uninstall Nexus CLI Docker"
@@ -680,6 +767,7 @@ show_help() {
     echo "  $0 install      # Install Nexus"
     echo "  $0 start        # Start node"
     echo "  $0 status       # Lihat status"
+    echo "  $0 info         # Lihat detail container (port, network, resource)"
     echo "  screen -r nexus # Attach ke screen session"
     echo "  $0 stop         # Stop node"
     echo
@@ -707,6 +795,12 @@ main() {
             ;;
         "status")
             show_status
+            ;;
+        "info"|"detail")
+            show_container_info
+            ;;
+        "debug")
+            debug_system
             ;;
         "logs")
             show_logs
