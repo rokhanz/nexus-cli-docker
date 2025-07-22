@@ -1,5 +1,12 @@
 # 🚀 NEXUS MANAGER - ALL-IN-ONE SCRIPT GUIDE
 
+![GitHub stars](https://img.shields.io/github/stars/rokhanz/nexus-multi-docker?style=flat)
+![GitHub forks](https://img.shields.io/github/forks/rokhanz/nexus-multi-docker?style=flat)
+![GitHub issues](https://img.shields.io/github/issues/rokhanz/nexus-multi-docker)
+![GitHub license](https://img.shields.io/github/license/rokhanz/nexus-multi-docker)
+![Bash](https://img.shields.io/badge/Bash-4.0%2B-green)
+![Docker](https://img.shields.io/badge/Docker-20.10%2B-blue)
+
 ## 📋 OVERVIEW
 
 **nexus-manager.sh** adalah script all-in-one yang menggabungkan semua fungsi untuk mengelola Nexus CLI Docker dalam satu file. Script ini mencakup instalasi, uninstall, dan manajemen node dengan menggunakan screen session.
